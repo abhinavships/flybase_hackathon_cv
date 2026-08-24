@@ -1,0 +1,17 @@
+{
+  "bearing_deg": 204.7,
+  "lat_shift_m": -7.0,
+  "lon_shift_m": 8.0,
+  "scale": 0.69,
+  "mirror": false,
+  "resolved": {
+    "anchor_lat": 18.56599412,
+    "anchor_lon": 73.77151581,
+    "frame_x0_m": 9.99,
+    "frame_y0_m": 68.32,
+    "bearing_deg": 204.7,
+    "scale": 0.69,
+    "mirror": false,
+    "note": "Image frame is +X right, +Y down. +X lies along bearing_deg, +Y along bearing_deg + 90. (X_s, Y_s) -> ground: subtract (frame_x0_m, frame_y0_m), multiply by scale, rotate, then offset from the anchor."
+  }
+}

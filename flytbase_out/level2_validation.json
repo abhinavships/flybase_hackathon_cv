@@ -1,0 +1,43 @@
+{
+  "gcp_points": [
+    [
+      3400.0,
+      0.0
+    ],
+    [
+      3780.0,
+      310.0
+    ],
+    [
+      530.0,
+      2060.0
+    ],
+    [
+      0.0,
+      1780.0
+    ]
+  ],
+  "corridor_width_m": 17.9,
+  "corridor_length_m": 130.91,
+  "gsd_m_per_100px": {
+    "far": 3.224,
+    "mid": 2.806,
+    "near": 2.475
+  },
+  "ped_walk_mps": 1.232,
+  "accel_p1_p99": [
+    -2.88,
+    2.85
+  ],
+  "tracks_total": 316,
+  "tracks_moving": 167,
+  "median_length_m": {
+    "HGV-rigid": 8.14,
+    "LGV": 5.52,
+    "car": 3.37,
+    "cyclist": 2.17,
+    "motorcycle": 1.51,
+    "pedestrian": 1.18,
+    "three-wheeler": 2.96
+  }
+}

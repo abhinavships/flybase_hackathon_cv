@@ -1,0 +1,12 @@
+{
+  "window_s": 89.8898898898899,
+  "n_tracks": 316,
+  "n_moving": 167,
+  "n_static": 149,
+  "throughput_vph": 6688.18262806236,
+  "pcu_ph": 4449.443652561246,
+  "two_wheeler_share": 0.6178343949044586,
+  "median_speed_kmh": 17.5931150077313,
+  "median_delay_s": 0.0,
+  "classes": 6
+}

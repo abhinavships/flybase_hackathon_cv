@@ -1,0 +1,9 @@
+torch>=2.2
+torchvision>=0.17
+ultralytics>=8.3
+supervision>=0.24,<0.27
+huggingface_hub>=0.24
+opencv-python-headless>=4.9
+pandas>=2.2
+pyarrow>=16
+numpy>=1.26

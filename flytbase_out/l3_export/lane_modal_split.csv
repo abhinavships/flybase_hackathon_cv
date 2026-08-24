@@ -1,0 +1,15 @@
+lane_key,class_final,count,pcu,v_med_kmh,share
++Y (up-corridor) L1,motorcycle,2,1.0,4.338446125598068,1.0
++Y (up-corridor) L2,motorcycle,11,5.5,15.836053781154138,0.6470588235294118
++Y (up-corridor) L2,car,5,5.0,17.836545069504968,0.29411764705882354
++Y (up-corridor) L2,three-wheeler,1,1.2,26.39508775686728,0.058823529411764705
++Y (up-corridor) L3,car,3,3.0,12.817945830691759,0.5
++Y (up-corridor) L3,motorcycle,3,1.5,14.191649066375183,0.5
++Y (up-corridor) L4,pedestrian,5,0.0,4.797684211283091,1.0
++Y (up-corridor) L5,pedestrian,1,0.0,10.946730012607855,1.0
+-Y (down-corridor) L1,motorcycle,27,13.5,17.78664998412828,0.6585365853658537
+-Y (down-corridor) L1,car,14,14.0,18.749590921654196,0.34146341463414637
+-Y (down-corridor) L2,motorcycle,16,8.0,11.139362874385785,0.5161290322580645
+-Y (down-corridor) L2,car,13,13.0,13.271092879447556,0.41935483870967744
+-Y (down-corridor) L2,HGV-rigid,1,2.2,15.578361880717997,0.03225806451612903
+-Y (down-corridor) L2,pedestrian,1,0.0,5.02963677894391,0.03225806451612903

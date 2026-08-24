@@ -1,0 +1,39 @@
+# Python & Virtual Envs
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Video & Large Media Files (Excluded from repository)
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.avi
+*.mkv
+*.webm
+*.flv
+tracks_annotated.mp4
+
+# Archives & Compressed Files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# OS & Editor Metadata
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.tmp
+.vscode/
+.idea/
+
+# Temp outputs
+smoke_test/
