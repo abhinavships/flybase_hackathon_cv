@@ -60,7 +60,25 @@ streamlit run dashboard/app.py
 
 The application will launch at `http://localhost:8501`.
 
-### 3. Run Batch Data Export
+### 3. Real-Time Tracking (live)
+
+`01_track.py` is the accurate **offline** pipeline (tiled inference for maximum
+small-object recall). For **live** tracking as traffic moves — webcam, RTSP
+drone/CCTV stream, or a video file — use the whole-frame real-time script,
+which leans on Ultralytics' built-in ByteTrack/BoT-SORT tracker:
+
+```bash
+python notebooks/realtime_track.py --source 0                 # webcam
+python notebooks/realtime_track.py --source intersection.mp4 --imgsz 960
+python notebooks/realtime_track.py --source rtsp://host/stream # live drone/CCTV
+python notebooks/realtime_track.py --benchmark 120 --imgsz 736 # throughput check
+```
+
+A live window shows boxes, track IDs, and a running FPS counter (`q` quits).
+Lower `--imgsz` trades small-object recall for speed; `--benchmark N` measures
+detect+track FPS on your hardware (synthetic frames when no `--source` given).
+
+### 4. Run Batch Data Export
 
 To generate summary tables (CSVs) and automated markdown findings (`findings.md`):
 
