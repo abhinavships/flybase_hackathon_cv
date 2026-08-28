@@ -72,23 +72,44 @@ python notebooks/realtime_track.py --source 0                 # webcam
 python notebooks/realtime_track.py --source intersection.mp4 --imgsz 960
 python notebooks/realtime_track.py --source rtsp://host/stream # live drone/CCTV
 python notebooks/realtime_track.py --benchmark 120 --imgsz 736 # throughput check
+
+# Track a chosen 2-min segment (skip the first 90s) and save a shareable clip:
+python notebooks/realtime_track.py --source Intersection_Merged.MP4 \
+    --start-sec 90 --max-seconds 120 --imgsz 960 \
+    --no-show --out clip.mp4 --out-width 640 --out-fps 10
+
+# Keep up with live playback on slow hardware by processing every Nth frame:
+python notebooks/realtime_track.py --source Intersection_Merged.MP4 \
+    --start-sec 90 --max-seconds 30 --frame-stride 6
 ```
 
 A live window shows boxes, track IDs, and a running FPS counter (`q` quits).
-Lower `--imgsz` trades small-object recall for speed; `--benchmark N` measures
-detect+track FPS on your hardware (synthetic frames when no `--source` given).
+Key flags:
 
-Measured throughput (VisDrone YOLO11s, Apple M-series **MPS** GPU, 150 frames warm):
+- `--imgsz` — inference size; lower = faster, less small-object recall.
+- `--start-sec` / `--max-seconds` — track only a time window of a file.
+- `--frame-stride N` — process every Nth frame (frame-skip). The `[result]`
+  line reports real-time against the rate needed to keep up, `source_fps / N`.
+- `--out` / `--out-width` / `--out-fps` — write an H.264 (avc1) annotated clip,
+  optionally downscaled / fps-subsampled, at true playback speed.
+- `--benchmark N` — process N frames headless and print detect+track FPS
+  (synthetic frames when no `--source` is given).
 
-| `--imgsz` | detect+track FPS | real-time? |
-|-----------|------------------|------------|
-| 640       | ~31              | ✅ yes      |
-| 736       | ~29              | ✅ yes      |
-| 960       | ~19              | ✅ yes      |
+**Measured throughput** (VisDrone YOLO11s, Apple M-series **MPS** GPU):
 
-So live tracking runs comfortably in real time on a laptop GPU; a CUDA GPU is
-faster still. Use 01_track.py's tiled inference only offline, when you need
-maximum recall on tiny objects in 4K frames.
+| Input                         | FPS   | Real-time?                              |
+|-------------------------------|-------|-----------------------------------------|
+| synthetic 1280p, `--imgsz 640`| ~31   | ✅ yes                                   |
+| synthetic 1280p, `--imgsz 736`| ~29   | ✅ yes                                   |
+| synthetic 1280p, `--imgsz 960`| ~19   | ✅ yes                                   |
+| real **4K** footage, `--imgsz 960` | ~5 | ❌ batch (4K decode + ~100 objects/frame) |
+
+At native 4K on a laptop GPU the run is **offline batch** (~5 FPS, ~6× slower
+than 30 fps playback) — the limiter is 4K decode and object count, not the
+tracker. To hit real time: feed 1080p instead of 4K, run on a CUDA GPU, or use
+`--frame-stride` (e.g. `6` so ~5 FPS × 6 keeps up with 30 fps playback).
+`01_track.py`'s tiled inference stays offline-only, for maximum recall on tiny
+objects in 4K frames.
 
 ### 4. Run Batch Data Export
 
