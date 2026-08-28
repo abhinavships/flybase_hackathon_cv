@@ -78,6 +78,18 @@ A live window shows boxes, track IDs, and a running FPS counter (`q` quits).
 Lower `--imgsz` trades small-object recall for speed; `--benchmark N` measures
 detect+track FPS on your hardware (synthetic frames when no `--source` given).
 
+Measured throughput (VisDrone YOLO11s, Apple M-series **MPS** GPU, 150 frames warm):
+
+| `--imgsz` | detect+track FPS | real-time? |
+|-----------|------------------|------------|
+| 640       | ~31              | ✅ yes      |
+| 736       | ~29              | ✅ yes      |
+| 960       | ~19              | ✅ yes      |
+
+So live tracking runs comfortably in real time on a laptop GPU; a CUDA GPU is
+faster still. Use 01_track.py's tiled inference only offline, when you need
+maximum recall on tiny objects in 4K frames.
+
 ### 4. Run Batch Data Export
 
 To generate summary tables (CSVs) and automated markdown findings (`findings.md`):
