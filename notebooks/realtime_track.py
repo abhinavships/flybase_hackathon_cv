@@ -87,35 +87,83 @@ def synthetic_frames(n: int, wh=(1280, 720)):
         yield frame
 
 
+def read_window(path, start_sec, max_seconds):
+    """Yield frames of `path` in the window [start_sec, start_sec+max_seconds).
+    Returns (generator, source_fps, n_frames_in_window)."""
+    import cv2
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        sys.exit(f"could not open {path}")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    start_f = int(round(start_sec * fps))
+    end_f = int(round((start_sec + max_seconds) * fps)) if max_seconds > 0 else total
+    end_f = min(end_f, total) if total > 0 else end_f
+    if start_f > 0:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_f)
+
+    def gen():
+        i = start_f
+        try:
+            while i < end_f:
+                ok, fr = cap.read()
+                if not ok:
+                    break
+                yield fr
+                i += 1
+        finally:
+            cap.release()
+
+    return gen(), fps, max(end_f - start_f, 0)
+
+
 def run(args) -> None:
     device = pick_device(args.device)
     model = load_model(args.weights)
     print(f"[info] device={device} imgsz={args.imgsz} tracker={args.tracker} conf={args.conf}",
           file=sys.stderr)
 
-    track_kwargs = dict(
-        persist=True, stream=True, tracker=f"{args.tracker}.yaml",
-        conf=args.conf, iou=args.iou, imgsz=args.imgsz, device=device,
-        classes=args.classes, verbose=False,
+    kw = dict(
+        persist=True, tracker=f"{args.tracker}.yaml", conf=args.conf, iou=args.iou,
+        imgsz=args.imgsz, device=device, classes=args.classes, verbose=False,
     )
 
     # Benchmark with no real source: feed synthetic frames one at a time.
     if args.benchmark and not args.source:
-        _loop(model, synthetic_frames(args.benchmark), track_kwargs,
-              show=False, out=None, limit=args.benchmark, label="synthetic")
+        _loop(model, synthetic_frames(args.benchmark), kw, show=False, out=None,
+              limit=args.benchmark, label="synthetic")
         return
 
-    # Real source: let Ultralytics own the decode loop (stream=True is a generator).
     src = int(args.source) if args.source.isdigit() else args.source
-    results = model.track(source=src, **track_kwargs)
-    _loop(model, results, None, show=not args.no_show, out=args.out,
-          limit=args.benchmark or 0, label=str(src), is_results=True)
+
+    # Windowed file source: decode with cv2, seek to the window, track per frame.
+    if isinstance(src, str) and (args.start_sec > 0 or args.max_seconds > 0):
+        frames, src_fps, nwin = read_window(src, args.start_sec, args.max_seconds)
+        end = args.start_sec + args.max_seconds if args.max_seconds > 0 else -1
+        # Subsample the written file to --out-fps while keeping real playback speed:
+        # store every `stride`-th frame and set the writer's fps to src/stride.
+        stride = max(1, round(src_fps / args.out_fps)) if args.out_fps > 0 else 1
+        print(f"[info] window [{args.start_sec:.0f}s, {end:.0f}s) ~{nwin} frames @ {src_fps:.2f} fps "
+              f"(write every {stride} -> {src_fps/stride:.1f} fps out)", file=sys.stderr)
+        _loop(model, frames, kw, show=not args.no_show, out=(args.out or None), limit=0,
+              label=f"{Path(str(src)).name}[{args.start_sec:.0f}-{end:.0f}s]",
+              total=nwin, out_fps=src_fps / stride, out_width=args.out_width, write_stride=stride)
+        return
+
+    # Whole source: let Ultralytics own the decode loop (stream=True generator).
+    results = model.track(source=src, stream=True, **kw)
+    _loop(model, results, None, show=not args.no_show, out=(args.out or None),
+          limit=args.benchmark or 0, label=str(src), is_results=True,
+          out_width=args.out_width)
 
 
-def _loop(model, iterable, track_kwargs, show, out, limit, label, is_results=False):
+def _loop(model, iterable, kw, show, out, limit, label, is_results=False,
+          total=0, out_fps=0.0, out_width=0, write_stride=1):
     """Drive frames through detect+track, overlay FPS, optionally show/write.
     Two entry shapes: raw frames (call model.track per frame) or an Ultralytics
-    results generator (already tracked)."""
+    results generator (already tracked). `out_fps` sets the output file's playback
+    rate (use the source fps so a saved clip plays at real speed); `out_width`
+    downscales the written/shown frame."""
     import cv2
 
     writer = None
@@ -128,10 +176,7 @@ def _loop(model, iterable, track_kwargs, show, out, limit, label, is_results=Fal
                 result = item
                 frame = result.plot()  # BGR annotated frame
             else:
-                # raw-frame path (synthetic benchmark): track this single frame.
-                # stream=True is dropped here since we pass frames one at a time.
-                kw = {k: v for k, v in track_kwargs.items() if k != "stream"}
-                result = model.track(item, **kw)[0]
+                result = model.track(item, **kw)[0]  # one frame at a time
                 frame = result.plot()
 
             n += 1
@@ -140,19 +185,31 @@ def _loop(model, iterable, track_kwargs, show, out, limit, label, is_results=Fal
                 fps = n / elapsed
             ntrk = 0 if result.boxes is None or result.boxes.id is None else len(result.boxes.id)
 
+            if out_width and frame.shape[1] > out_width:
+                s = out_width / frame.shape[1]
+                frame = cv2.resize(frame, (out_width, int(frame.shape[0] * s)))
+
             if show or out:
                 cv2.putText(frame, f"{fps:5.1f} FPS  |  {ntrk} tracked",
                             (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-            if out:
+            if out and (n - 1) % write_stride == 0:
                 if writer is None:
                     h, w = frame.shape[:2]
-                    writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"mp4v"),
-                                             max(fps, 10), (w, h))
+                    fps_out = out_fps or max(fps, 10)
+                    # avc1 (H.264) compresses ~5-10x smaller than mp4v; fall back if
+                    # the platform's OpenCV lacks the encoder.
+                    writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"avc1"), fps_out, (w, h))
+                    if not writer.isOpened():
+                        writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"mp4v"), fps_out, (w, h))
                 writer.write(frame)
             if show:
                 cv2.imshow("realtime_track — q to quit", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
+            if n % 100 == 0:
+                pct = f" ({100*n/total:.0f}%)" if total else ""
+                print(f"[info] {n}{('/'+str(total)) if total else ''} frames{pct} "
+                      f"| {fps:.1f} FPS live | {ntrk} tracked", file=sys.stderr)
             if limit and n >= limit:
                 break
     finally:
@@ -183,6 +240,10 @@ def main() -> None:
     p.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     p.add_argument("--classes", type=int, nargs="*", default=DEFAULT_CLASSES,
                    help="VisDrone class ids to keep (default: all road users)")
+    p.add_argument("--start-sec", type=float, default=0.0, help="window start in source seconds")
+    p.add_argument("--max-seconds", type=float, default=0.0, help="window length in seconds (0 = to end)")
+    p.add_argument("--out-width", type=int, default=0, help="downscale written/shown frame to this width (0 = full)")
+    p.add_argument("--out-fps", type=float, default=0.0, help="subsample the written file to this fps (0 = every frame); playback stays real-time")
     p.add_argument("--no-show", action="store_true", help="headless; write --out instead of a window")
     p.add_argument("--out", default="realtime_annotated.mp4", help="output path when --no-show")
     p.add_argument("--benchmark", type=int, default=0, metavar="N",
