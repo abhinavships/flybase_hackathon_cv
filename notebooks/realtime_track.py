@@ -87,9 +87,10 @@ def synthetic_frames(n: int, wh=(1280, 720)):
         yield frame
 
 
-def read_window(path, start_sec, max_seconds):
-    """Yield frames of `path` in the window [start_sec, start_sec+max_seconds).
-    Returns (generator, source_fps, n_frames_in_window)."""
+def read_window(path, start_sec, max_seconds, frame_stride=1):
+    """Yield frames of `path` in [start_sec, start_sec+max_seconds), keeping only
+    every `frame_stride`-th frame (skipped frames are grabbed, not decoded to BGR,
+    which is cheaper). Returns (generator, effective_fps, n_frames_yielded)."""
     import cv2
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
@@ -101,11 +102,17 @@ def read_window(path, start_sec, max_seconds):
     end_f = min(end_f, total) if total > 0 else end_f
     if start_f > 0:
         cap.set(cv2.CAP_PROP_POS_FRAMES, start_f)
+    s = max(1, frame_stride)
+    n_yield = (end_f - start_f + s - 1) // s
 
     def gen():
         i = start_f
         try:
             while i < end_f:
+                if (i - start_f) % s != 0:
+                    cap.grab()          # advance without the BGR decode/copy
+                    i += 1
+                    continue
                 ok, fr = cap.read()
                 if not ok:
                     break
@@ -114,7 +121,7 @@ def read_window(path, start_sec, max_seconds):
         finally:
             cap.release()
 
-    return gen(), fps, max(end_f - start_f, 0)
+    return gen(), fps / s, max(n_yield, 0)
 
 
 def run(args) -> None:
@@ -138,16 +145,19 @@ def run(args) -> None:
 
     # Windowed file source: decode with cv2, seek to the window, track per frame.
     if isinstance(src, str) and (args.start_sec > 0 or args.max_seconds > 0):
-        frames, src_fps, nwin = read_window(src, args.start_sec, args.max_seconds)
+        frames, eff_fps, nwin = read_window(src, args.start_sec, args.max_seconds,
+                                            frame_stride=args.frame_stride)
         end = args.start_sec + args.max_seconds if args.max_seconds > 0 else -1
-        # Subsample the written file to --out-fps while keeping real playback speed:
-        # store every `stride`-th frame and set the writer's fps to src/stride.
-        stride = max(1, round(src_fps / args.out_fps)) if args.out_fps > 0 else 1
-        print(f"[info] window [{args.start_sec:.0f}s, {end:.0f}s) ~{nwin} frames @ {src_fps:.2f} fps "
-              f"(write every {stride} -> {src_fps/stride:.1f} fps out)", file=sys.stderr)
+        # eff_fps = source_fps / frame_stride is the rate we must process at to keep
+        # up with live playback. Subsample the WRITTEN file further to --out-fps.
+        stride = max(1, round(eff_fps / args.out_fps)) if args.out_fps > 0 else 1
+        print(f"[info] window [{args.start_sec:.0f}s, {end:.0f}s) frame_stride={args.frame_stride} "
+              f"-> {nwin} frames @ {eff_fps:.2f} fps effective; need >= {eff_fps:.1f} FPS for real-time",
+              file=sys.stderr)
         _loop(model, frames, kw, show=not args.no_show, out=(args.out or None), limit=0,
-              label=f"{Path(str(src)).name}[{args.start_sec:.0f}-{end:.0f}s]",
-              total=nwin, out_fps=src_fps / stride, out_width=args.out_width, write_stride=stride)
+              label=f"{Path(str(src)).name}[{args.start_sec:.0f}-{end:.0f}s]/stride{args.frame_stride}",
+              total=nwin, out_fps=eff_fps / stride, out_width=args.out_width,
+              write_stride=stride, realtime_target=eff_fps)
         return
 
     # Whole source: let Ultralytics own the decode loop (stream=True generator).
@@ -158,7 +168,7 @@ def run(args) -> None:
 
 
 def _loop(model, iterable, kw, show, out, limit, label, is_results=False,
-          total=0, out_fps=0.0, out_width=0, write_stride=1):
+          total=0, out_fps=0.0, out_width=0, write_stride=1, realtime_target=15.0):
     """Drive frames through detect+track, overlay FPS, optionally show/write.
     Two entry shapes: raw frames (call model.track per frame) or an Ultralytics
     results generator (already tracked). `out_fps` sets the output file's playback
@@ -222,8 +232,9 @@ def _loop(model, iterable, kw, show, out, limit, label, is_results=False,
 
     elapsed = time.time() - t0
     fps = n / elapsed if elapsed > 0 else 0.0
-    print(f"[result] source={label} frames={n} elapsed={elapsed:.2f}s "
-          f"=> {fps:.2f} FPS  ({'REAL-TIME' if fps >= 15 else 'below 15 fps'})")
+    verdict = (f"REAL-TIME (>= {realtime_target:.1f} FPS needed)" if fps >= realtime_target
+               else f"below real-time ({realtime_target:.1f} FPS needed)")
+    print(f"[result] source={label} frames={n} elapsed={elapsed:.2f}s => {fps:.2f} FPS  ({verdict})")
     if out:
         print(f"[info] wrote annotated video -> {out}")
 
@@ -242,6 +253,7 @@ def main() -> None:
                    help="VisDrone class ids to keep (default: all road users)")
     p.add_argument("--start-sec", type=float, default=0.0, help="window start in source seconds")
     p.add_argument("--max-seconds", type=float, default=0.0, help="window length in seconds (0 = to end)")
+    p.add_argument("--frame-stride", type=int, default=1, help="process every Nth frame (N>1 = real-time via frame-skip on slow hardware)")
     p.add_argument("--out-width", type=int, default=0, help="downscale written/shown frame to this width (0 = full)")
     p.add_argument("--out-fps", type=float, default=0.0, help="subsample the written file to this fps (0 = every frame); playback stays real-time")
     p.add_argument("--no-show", action="store_true", help="headless; write --out instead of a window")
