@@ -198,6 +198,7 @@ def wrap180(a):
 def track_summary(kin: pd.DataFrame, bearing_span_m: float = 8.0) -> pd.DataFrame:
     """One row per track: endpoints, bearings, turn angle, duration, speeds."""
     rows = []
+    dt0 = nominal_dt(kin)  # constant across tracks; don't recompute the median per row
     for tid, t in kin.groupby("track_id", sort=False):
         x = t["X_s"].to_numpy(float)
         y = t["Y_s"].to_numpy(float)
@@ -222,7 +223,7 @@ def track_summary(kin: pd.DataFrame, bearing_span_m: float = 8.0) -> pd.DataFram
                 v_med_kmh=float(np.nanmedian(spd) * 3.6),
                 v85_kmh=float(np.nanpercentile(spd, 85) * 3.6) if np.isfinite(spd).any() else np.nan,
                 v_max_kmh=float(np.nanmax(spd) * 3.6) if np.isfinite(spd).any() else np.nan,
-                stopped_s=float((spd < STOP_SPEED_MPS).sum() * nominal_dt(kin)),
+                stopped_s=float((spd < STOP_SPEED_MPS).sum() * dt0),
                 L=float(t["L"].median()) if "L" in t.columns else np.nan,
                 is_moving=bool(t["is_moving"].iloc[0]),
                 pcu=pcu_for(t["class_final"].iloc[0]),
