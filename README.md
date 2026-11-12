@@ -1,6 +1,29 @@
-# FlytBase Computer Vision Hackathon — Drone Traffic Analytics & Dashboard
+# Drone Traffic Analytics: from 4K aerial video to junction-level insight
 
-A comprehensive computer vision pipeline and Level 3 Aggregate Insight dashboard for analyzing aerial drone video traffic trajectories.
+Detects and tracks every road user in drone footage of an intersection, converts pixel tracks to real-world kinematics, and turns them into the numbers a traffic engineer asks for: classified flow, turning movements, speed profiles, queues and conflict density. Built for the FlytBase Visual Intelligence Hackathon.
+
+![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![YOLO11](https://img.shields.io/badge/detector-YOLO11s%20VisDrone-purple) ![Tracking](https://img.shields.io/badge/tracking-ByteTrack%20%2F%20BoT--SORT-informational) ![Streamlit](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b)
+
+## Headline findings
+
+From a 90 second window of one junction (`flytbase_out/l3_export/findings.md`):
+
+| Metric | Value |
+|---|---|
+| Moving road users tracked | 167 (149 static tracks excluded) |
+| Throughput | 6,688 veh/h, 4,449 PCU/h |
+| Two-wheeler share of motorised traffic | 62% |
+| Median speed | 17.6 km/h |
+| Movement split | 108 through, 31 left, 21 right, 7 u-turn |
+
+Classes with fewer than 20 tracks are flagged as observations, not distributions, throughout the outputs.
+
+## Pipeline
+
+1. **Detect and track** with tiled YOLO11s inference for small-object recall in 4K frames (`notebooks/01_track.py`), or whole-frame real-time tracking for live streams (`notebooks/realtime_track.py`)
+2. **Georeference and derive kinematics**: speed, heading, path length and stopped delay per track (Level 2 outputs)
+3. **Aggregate** into flow, OD matrices, speed fields, queues and fundamental diagrams (`dashboard/l3_core.py`)
+4. **Explore** in the Streamlit dashboard or export tables and a findings report (`dashboard/l3_export.py`)
 
 ---
 
